@@ -1,64 +1,46 @@
-# Live Weather Data Aggregation & Prediction System
-
-## 1. Project Overview
-
-**Live Weather Data Aggregation & Prediction System** is a proposed end-to-end Big Data system for collecting, processing, storing, and analyzing real-time weather data from multiple sources.
-
-The project is developed for the **Big Data Storage and Processing** course, with the initial focus on building a scalable data pipeline for weather data aggregation. The system is also intended to be extended with a **weather prediction component**, using historical and continuously collected weather data to support short-term forecasting.
-
-The main objectives are:
-
-- Continuously ingest weather data from multiple sources, such as APIs and sensors.
-- Process and aggregate incoming data using distributed and streaming technologies.
-- Store both raw and processed weather data for further analysis.
-- Provide SQL-based access to weather data for analytical queries.
-- Explore the use of historical and real-time weather data for **short-term weather prediction**.
-- Visualize weather observations, trends, and potentially prediction results.
-
-The prediction component is considered an **extension of the core data aggregation pipeline**. Depending on the available data and project progress, the system may be used to predict variables such as temperature, humidity, precipitation, or other weather-related conditions.
-
----
-
-## 2. Proposed Technology Stack
-
-The following technologies are **planned candidates** for the system architecture. The final implementation may be adjusted depending on technical feasibility, data availability, and project requirements.
-
-| Component | Proposed Technology |
-|---|---|
-| Data Ingestion | **Apache NiFi** |
-| Message Streaming | **Apache Kafka** |
-| Stream / Batch Processing | **Apache Spark** |
-| Data Lake Storage | **MinIO / S3-compatible Storage** |
-| Table Format | **Apache Iceberg** |
-| Data Format | **CSV / Parquet** |
-| Metadata & SQL Metastore | **Apache Hive** |
-| SQL Query Engine | **Trino** |
-| NoSQL Storage | **MongoDB** |
-| Visualization | **Apache Superset** |
-| Weather Prediction | **Machine Learning models** *(planned)* |
-
-The proposed architecture follows the general flow:
-
-```text
-Weather Data Sources
-        │
-        ▼
-   Apache NiFi
-        │
-        ▼
-   Apache Kafka
-        │
-        ▼
-    Apache Spark
-        │
-        ▼
- MinIO / S3 + Iceberg
-        │
-        ├──────────────► Trino ───► Apache Superset
-        │
-        ▼
- Weather Prediction
-    (Planned)
-```
-
-> **Note:** This technology stack represents the **current project plan**, rather than a fixed implementation. Individual components may be changed or removed during development based on system requirements and experimental results.
+US Air Traffic Big Data Pipeline
+A Big Data Storage and Processing project for analyzing historical US flight data and processing near-real-time flight events.
+Architecture
+- Batch: BTS historical data → HDFS → Apache Spark → Parquet
+- Streaming: AviationStack API (or clearly labeled simulated events) → Apache Kafka → Spark Structured Streaming → HDFS
+- Serving: Processed batch and streaming results → MongoDB → Dashboard
+The project follows a Lambda Architecture, combining batch and streaming pipelines.
+Technologies
+- Apache Spark / PySpark
+- HDFS
+- Apache Kafka
+- MongoDB (NoSQL)
+- Docker Compose for local development
+- Kubernetes or Cloud deployment to be evaluated for the final milestone, according to course requirements
+Data Sources
+- Historical: US Bureau of Transportation Statistics (BTS) On-Time Performance data
+- Real-time: AviationStack API, subject to API access and usage limits; simulated events may be used for development and testing
+Current Development Scope
+Development starts with a small BTS subset (January 2020) before scaling to a larger time range. The pipeline is developed and tested incrementally.
+Project Goals
+- Build an end-to-end data pipeline: ingestion, processing, storage, and visualization
+- Apply intermediate and advanced Spark transformations, aggregations, joins, and optimization
+- Demonstrate streaming concepts such as event-time windows, watermarking, checkpointing, and recovery
+- Store query-ready results in a NoSQL database and present key metrics in a dashboard
+Repository Structure
+.
+├── hadoop/
+│   ├── conf/
+│   ├── data/
+│   └── scripts/
+├── data/
+├── spark/
+│   └── jobs/
+├── kafka/
+├── docker-compose.yml
+└── README.md
+Status
+- HDFS is running locally in Docker.
+- Spark batch processing has successfully processed the January 2020 BTS subset and written Parquet output to HDFS.
+- Kafka Producer/Consumer messaging has been tested successfully.
+- Spark Structured Streaming, MongoDB integration, dashboard, and final deployment remain to be completed.
+Notes
+- Keep raw data separate from processed outputs.
+- Record data source, collection time, and data-quality checks.
+- Do not label simulated events as live API data.
+- Docker Compose is currently used for development; final deployment should follow the course milestone requirements.
