@@ -79,20 +79,21 @@ Flight events may be obtained from AviationStack, subject to API access and usag
 
 ```text
 .
-├── batch-layer/
-│   ├── spark_jobs/
-│   ├── ...
-│   └── ...
-├── hadoop/
-│   ├── conf/
-│   ├── data/
-│   └── scripts/
-├── data/
-├── spark/
-│   └── jobs/
-├── kafka/
+├── BTS_ZIP\                     # Các file CSV nguồn theo tháng đã giải nén
+├── spark_jobs\
+│   ├── 02_inspect_bts.py        # Tiện ích kiểm tra một file ban đầu
+│   ├── 03_clean_bts.py          # Bản mẫu làm sạch một tháng ở giai đoạn đầu
+│   ├── 04_validate_parquet.py   # Kiểm tra một phân vùng ở giai đoạn đầu
+│   ├── 05_quality_check.py      # Các kiểm tra tùy chọn cho một phân vùng
+│   ├── 06_batch_process_all.py  # ETL Spark chính cho 51 tháng
+│   ├── 07_retry_2022_01.py      # Script khôi phục cho tháng 1/2022
+│   └── 08_verify_partition.py   # Xác minh toàn bộ khoảng thời gian
+├── check_partitions.ps1         # Script PowerShell kiểm tra phân vùng (tùy chọn)
 ├── docker-compose.yml
-└── README.md
+└── docs\
+    ├── data_inventory.md
+    ├── AERO_Member1_End_to_End_Guide_vi.md
+    └── data_dictionary.md
 ```
 
 The structure above illustrates the main project components. Refer to the actual repository tree for the current locations of scripts, configurations, and data.
