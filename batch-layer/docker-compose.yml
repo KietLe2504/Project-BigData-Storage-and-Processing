@@ -1,0 +1,48 @@
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: aero-namenode
+    restart: unless-stopped
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    environment:
+      CLUSTER_NAME: aero-cluster
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+      HDFS_CONF_dfs_replication: "1"
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+      - ./BTS_ZIP:/data/input:ro
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: aero-datanode
+    restart: unless-stopped
+    depends_on:
+      - namenode
+    ports:
+      - "9864:9864"
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+      HDFS_CONF_dfs_replication: "1"
+      SERVICE_START_DELAY: "10"
+    volumes:
+      - datanode_data:/hadoop/dfs/data
+
+  spark:
+    image: apache/spark:3.5.3
+    container_name: aero-spark
+    depends_on:
+      - namenode
+      - datanode
+    volumes:
+      - ./spark_jobs:/opt/spark_jobs
+      - ./BTS_ZIP:/data/input:ro
+    entrypoint: ["/bin/bash", "-lc", "sleep infinity"]
+
+
+volumes:
+  namenode_data:
+  datanode_data:
