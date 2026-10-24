@@ -5,6 +5,11 @@
 > **Môi trường:** Windows + PowerShell + Docker Desktop + VS Code
 > 
 > **Thư mục dự án:** `G:\Downloads_2\Batch_Layer` ( Ở đây do máy local thành viên 1 có thư mục gốc là như vậy, mọi người lên github thì git clone về máy của mình.
+>
+> **Link Dataset** https://www.kaggle.com/datasets/anhdnghng/us-bts-2026
+>
+> **Hướng dẫn tải** Vào output trên đường dẫn Kaggle, tải file dataset về local rồi giải nén ra
+> 
 > **Phạm vi dữ liệu:** Tháng 1/2022 đến tháng 3/2026 (51 tháng)
 
 **Quan trọng:** Các lệnh và đường dẫn phản ánh cấu hình dự án hiện tại được thảo luận trong quá trình triển khai. Hãy kiểm tra `docker-compose.yml` và các script thực tế trước khi thay đổi tên service, đường dẫn mount hoặc hành vi ghi đè.
@@ -38,21 +43,43 @@ Lần chạy xác minh đầy đủ đã được ghi nhận báo cáo:
 
 ---
 
-## 2. Cấu trúc dự án
+## 2. Cấu trúc dự án lẫn quy trình trước khi bắt đầu
+### Yêu cầu trước khi bắt đầu
+- Windows 10/11, PowerShell.
+- Docker Desktop đã cài và đang chạy (kiểm tra biểu tượng cá voi ở khay hệ thống).
+- Đủ RAM và dung lượng ổ đĩa: CSV nguồn khoảng 5,3 GB, cộng với dữ liệu HDFS và Parquet sinh ra. Nên dành thêm dung lượng trống đáng kể so với 5,3 GB.
+- VS Code (tùy chọn, để sửa file).
+- Git (chỉ cần cho mục 14).
 
-Dự án đang hoạt động hiện có dạng:
+Kiểm tra Docker:
+```
+powershell
+docker version
+docker compose version
+```
+
+Nếu một trong hai lệnh báo lỗi, hãy mở Docker Desktop và chờ nó hoàn tất khởi động rồi thử lại.
+
+Ví dụ ở Local của máy cá nhân là đường dẫn `G:\Downloads_2\Batch_Layer` (tùy vào mỗi người mà có local khác nhau). Sau khi giải nén dataset ta có folder `BTS_ZIP`, ta đưa toàn bộ folder trên vào trong đường dân 'G:\Downloads_2\Batch_Layer'. Dự án đang hoạt động hiện có dạng:
 
 ```text
 G:\Downloads_2\Batch_Layer\
 ├── BTS_ZIP\                     # Các file CSV nguồn theo tháng đã giải nén
+│   ├── manifest.json       
+│   ├── On_Time_Reporting_2022_1.csv   # Hệ thống file csv sau khi được giải nén ra         
+│   ├── On_Time_Reporting_2022_2.csv
+│   ├── On_Time_Reporting_2022_3.csv
+│   ├── On_Time_Reporting_2022_4.csv
+│   ├── ...
+│   └── On_Time_Reporting_2026_3.csv
 ├── spark_jobs\
-│   ├── 02_inspect_bts.py        # Tiện ích kiểm tra một file ban đầu
-│   ├── 03_clean_bts.py          # Bản mẫu làm sạch một tháng ở giai đoạn đầu
-│   ├── 04_validate_parquet.py   # Kiểm tra một phân vùng ở giai đoạn đầu
-│   ├── 05_quality_check.py      # Các kiểm tra tùy chọn cho một phân vùng
-│   ├── 06_batch_process_all.py  # ETL Spark chính cho 51 tháng
-│   ├── 07_retry_2022_01.py      # Script khôi phục cho tháng 1/2022
-│   └── 08_verify_partition.py   # Xác minh toàn bộ khoảng thời gian
+│   ├── 02_inspect_bts.py        # Tiện ích kiểm tra một file ban đầu  (Kiểm tra 1 tháng demo - Optional )
+│   ├── 03_clean_bts.py          # Bản mẫu làm sạch một tháng ở giai đoạn đầu (Optional)
+│   ├── 04_validate_parquet.py   # Kiểm tra một phân vùng ở giai đoạn đầu (Optional)
+│   ├── 05_quality_check.py      # Các kiểm tra tùy chọn cho một phân vùng (Optional)
+│   ├── 06_batch_process_all.py  # ETL Spark chính cho 51 tháng   (Quan trọng, chạy chính: Xử lý tất ca các tháng)
+│   ├── 07_retry_2022_01.py      # Script khôi phục cho tháng 1/2022 ( Trong trường hợp máy cá nhân bị lỗi ở tải tháng đầu - Optional)
+│   └── 08_verify_partition.py   # Xác minh toàn bộ khoảng thời gian (Quan trọng, chạy chính: Kiểm tra xác minh kết quả)
 ├── check_partitions.ps1         # Script PowerShell kiểm tra phân vùng (tùy chọn)
 ├── docker-compose.yml
 └── docs\
