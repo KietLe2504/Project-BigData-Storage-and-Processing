@@ -1,6 +1,6 @@
 # AERO Batch Layer — Hướng dẫn toàn trình cho Thành viên 1
 
-> **Mục đích:** Hướng dẫn này ghi lại quy trình làm việc của Thành viên 1: Chuẩn bị dữ liệu BTS theo tháng, Khởi động môi trường Docker/HDFS, chạy ETL batch Spark hiện có, Xác minh các phân vùng đã xử lý, và bàn giao kết quả cho bước tiếp theo.
+> **Mục đích:** Hướng dẫn quy trình làm việc của Phase 1: Chuẩn bị dữ liệu BTS theo tháng, Khởi động Docker/HDFS, chạy ETL batch Spark, Xác minh các phân vùng đã xử lý, và bàn giao kết quả cho bước tiếp theo.
 >
 > **Môi trường:** Windows + PowerShell + Docker Desktop + VS Code
 > 
@@ -18,12 +18,12 @@
 
 ## 1. Phạm vi và kết quả đã ghi nhận
 
-Trách nhiệm của Thành viên 1:
+Ở Phase 1:
 
-1. Thu thập và tổ chức dữ liệu BTS On-Time Reporting.
+1. Thu thập dataset BTS On-Time Reporting.
 2. Chuẩn bị môi trường HDFS cục bộ bằng Docker Compose.
-3. Đưa các CSV nguồn theo tháng vào tầng lưu trữ raw của HDFS.
-4. Chạy pipeline batch Spark hiện có để tạo đầu ra Parquet theo tháng.
+3. Đưa các CSV nguồn trong folder BTS_ZIP theo tháng vào tầng lưu trữ raw của HDFS.
+4. Chạy pipeline batch Spark để tạo đầu ra Parquet theo tháng.
 5. Xác minh các phân vùng đã xử lý theo tháng.
 6. Ghi tài liệu kiểm kê dữ liệu, từ điển dữ liệu, lệnh chạy và ghi chú bàn giao.
 
@@ -52,8 +52,8 @@ Lần chạy xác minh đầy đủ đã được ghi nhận báo cáo:
 - Git (chỉ cần cho mục 14).
 
 Kiểm tra Docker:
+
 ```
-powershell
 docker version
 docker compose version
 ```
@@ -89,13 +89,12 @@ G:\Downloads_2\Batch_Layer\
 
 File Compose có thể mount `spark_jobs` vào container Spark tại `/opt/spark_jobs`. Hãy xác nhận ánh xạ này trong `docker-compose.yml`; các lệnh bên dưới giả định nó tồn tại.
 
-### Các script tối thiểu cần giữ trong repository công khai
+### Các script tối thiểu, bắt buộc phải chạy trong repository công khai
 
 - `06_batch_process_all.py` — ETL chính.
 - `08_verify_partition.py` — xác minh toàn bộ khoảng thời gian.
-- `07_retry_2022_01.py` — script khôi phục tùy chọn, nên lưu trong `scripts/recovery/`.
 
-Các script ban đầu `02_inspect_bts.py`, `03_clean_bts.py` và `04_validate_parquet.py` là các tiện ích phát triển hoặc ví dụ đã bị thay thế. `05_quality_check.py` là tùy chọn. Đừng xóa bản gốc cho đến khi phiên bản đơn giản hóa đã được kiểm thử riêng.
+Các script ban đầu `02_inspect_bts.py`, `03_clean_bts.py` và `04_validate_parquet.py` là các tiện ích phát triển hoặc ví dụ đã bị thay thế. `05_quality_check.py`, `07_retry_2022_01.py` — script khôi phục tùy là tùy chọn. Đừng xóa bản gốc cho đến khi phiên bản đơn giản hóa đã được kiểm thử riêng.
 
 ---
 
@@ -103,21 +102,11 @@ Các script ban đầu `02_inspect_bts.py`, `03_clean_bts.py` và `04_validate_p
 
 - **Nguồn:** Cục Thống kê Vận tải Hoa Kỳ (BTS), On-Time Reporting / Carrier On-Time Performance.
 - **Phạm vi:** `2022-01` đến `2026-03`, bao gồm cả hai đầu.
-- **Số file dự kiến:** 51 CSV theo tháng.
-- **Dung lượng CSV cục bộ sau giải nén (xấp xỉ):** 5,2–5,3 GB.
-- **Thư mục cục bộ:** `G:\Downloads_2\Batch_Layer\BTS_ZIP\`
+- **Số file:** 51 CSV theo tháng.
+- **Dung lượng:** 5,2 GB.
+- **Thư mục cục bộ sau khi giải nén và đưa vào cấu trúc thư mục file project:** `G:\Downloads_2\Batch_Layer\BTS_ZIP\`
 
 Tên thư mục có chữ `ZIP`, nhưng các file thực tế là CSV đã giải nén.
-
-Số tháng dự kiến:
-
-- 2022: 12 tháng
-- 2023: 12 tháng
-- 2024: 12 tháng
-- 2025: 12 tháng
-- 2026: 3 tháng
-
-Tổng: `12 + 12 + 12 + 12 + 3 = 51`.
 
 ### Kiểm tra các file cục bộ trong PowerShell
 
@@ -133,18 +122,10 @@ Get-ChildItem .\BTS_ZIP -Filter *.csv |
 
 Số lượng kỳ vọng: `51`, giả sử không có file CSV thừa.
 
-Tùy chọn: tính tổng dung lượng CSV:
-
-```powershell
-$files = Get-ChildItem .\BTS_ZIP -Filter *.csv
-"{0:N2} GB" -f (($files | Measure-Object Length -Sum).Sum / 1GB)
-```
-
-Không tải các CSV nguồn dung lượng lớn lên GitHub.
-
 ---
 
 ## 4. Khởi động và kiểm tra các service Docker
+Sau khi kiếm tra số file đầy đủ xong, mở Docker Desktop và chờ đến khi nó vào trang chủ ((kiểm tra biểu tượng cá voi ở khay hệ thống), chú ý luôn luôn phải để Docker Desktop chạy trong quá trình running code, tránh để Docker tắt gây ảnh hưởng quá trình spark hay các bước khác thực hiện
 
 Chạy từ thư mục dự án:
 
@@ -159,13 +140,16 @@ docker compose ps
 - `docker compose up -d` khởi động các service ở chế độ nền.
 - `docker compose ps` hiển thị trạng thái các service.
 
-Thiết lập này gồm các service/container như `namenode` / `aero-namenode`, `datanode` / `aero-datanode` và một service Spark. **Tên service trong Compose** là tên mà `docker compose exec` sử dụng. Kiểm tra bằng:
+Output mong đợi: các service namenode, datanode, spark ở trạng thái running (hoặc Up).
+
+Thiết lập này gồm các service/container như `namenode` / `aero-namenode`, `datanode` / `aero-datanode` và một service Spark. 
+**Tên service trong Compose** là tên mà `docker compose exec` sử dụng. Kiểm tra bằng:
 
 ```powershell
 docker compose config --services
 ```
 
-Các log hữu ích:
+Nếu trường hợp container chạy chưa ổn định, xem log:
 
 ```powershell
 docker compose logs --tail 100 namenode
@@ -178,9 +162,6 @@ Nếu service Spark có tên `spark`:
 ```powershell
 docker compose logs --tail 100 spark
 ```
-
-Tránh dùng `docker compose down -v` như một bước xử lý sự cố thông thường: `-v` có thể xóa dữ liệu HDFS đã lưu bền.
-
 ---
 
 ## 5. Xác nhận các file nguồn hiển thị trong container
