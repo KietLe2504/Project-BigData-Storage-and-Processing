@@ -1,9 +1,10 @@
 # AERO Batch Layer — Hướng dẫn toàn trình cho Thành viên 1
 
-> **Mục đích:** Hướng dẫn này ghi lại quy trình làm việc của Thành viên 1: chuẩn bị dữ liệu BTS theo tháng, khởi động môi trường Docker/HDFS, chạy ETL batch Spark hiện có, xác minh các phân vùng đã xử lý, và bàn giao kết quả cho nhóm AERO.
+> **Mục đích:** Hướng dẫn này ghi lại quy trình làm việc của Thành viên 1: Chuẩn bị dữ liệu BTS theo tháng, Khởi động môi trường Docker/HDFS, chạy ETL batch Spark hiện có, Xác minh các phân vùng đã xử lý, và bàn giao kết quả cho bước tiếp theo.
 >
 > **Môi trường:** Windows + PowerShell + Docker Desktop + VS Code
-> **Thư mục dự án:** `G:\Downloads_2\Batch_Layer`
+> 
+> **Thư mục dự án:** `G:\Downloads_2\Batch_Layer` ( Ở đây do máy local thành viên 1 có thư mục gốc là như vậy, mọi người lên github thì git clone về máy của mình.
 > **Phạm vi dữ liệu:** Tháng 1/2022 đến tháng 3/2026 (51 tháng)
 
 **Quan trọng:** Các lệnh và đường dẫn phản ánh cấu hình dự án hiện tại được thảo luận trong quá trình triển khai. Hãy kiểm tra `docker-compose.yml` và các script thực tế trước khi thay đổi tên service, đường dẫn mount hoặc hành vi ghi đè.
