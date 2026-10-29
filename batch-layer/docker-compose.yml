@@ -37,6 +37,8 @@ services:
     depends_on:
       - namenode
       - datanode
+    ports:
+      - "8888:8888"
     volumes:
       - ./spark_jobs:/opt/spark_jobs
       - ./BTS_ZIP:/data/input:ro
