@@ -61,7 +61,7 @@ docker compose exec -u root spark bash -lc "apt-get update && apt-get install -y
 Nếu notebook in ra hai phiên bản khác nhau (ví dụ `pyspark 3.5.9 | Spark 3.5.3`), cài đúng phiên bản của Spark trong image:
 
 ```powershell
-docker compose exec -u root spark bash -lc "python3 -m pip install pyspark==3.5.3"
+docker compose exec -u root spark bash -lc "python3 -m pip install pyspark"
 ```
 
 Cần `pandas` và `pyarrow` cho phần *custom aggregation* (pandas UDF), cho PageRank sân bay (`airport_network`) và cho hàm `peek()` hiển thị bảng. Thiếu `pandas`, cell hiển thị bảng vẫn chạy (rơi về `show()`), nhưng `airport_network` sẽ lỗi. Thiếu `pyarrow`, phần pandas UDF bị bỏ qua.
