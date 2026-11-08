@@ -326,6 +326,10 @@ MongoDB; không thay thế kiểm chứng công thức Spark hoặc đếm lại
 
 ### 7.2. Xem bằng Compass, tùy chọn
 
+Hướng dẫn thao tác và bảng giải thích 25 collection, các trường KPI/box/
+hãng–tuyến/trạng thái nằm trong
+[tài liệu xem và đọc dữ liệu MongoDB](HUONG_DAN_XEM_MONGODB_VA_GIAI_THICH_COLLECTIONS.md).
+
 Theo [cách kết nối Compass chính thức](https://www.mongodb.com/docs/compass/connect/):
 
 1. Mở Compass → **Add new connection / New Connection**.

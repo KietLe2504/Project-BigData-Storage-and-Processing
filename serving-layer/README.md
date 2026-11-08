@@ -78,6 +78,7 @@ Tài liệu:
 - [Hướng dẫn đầy đủ: cài đặt, dữ liệu, bản đồ, kiểm thử và vận hành](doc_guide/HUONG_DAN_CHAY_TU_DAU_DEN_OUTPUT_M5.md)
 - [Hướng dẫn chạy nhanh](doc_guide/HUONG_DAN_CHAY_M5.md)
 - [Mô tả task M5](doc_guide/TaskM5.pdf)
+- [Mở MongoDB, xem collection và giải thích các trường](doc_guide/HUONG_DAN_XEM_MONGODB_VA_GIAI_THICH_COLLECTIONS.md)
 - [Contract đề xuất M4 → M5](contracts/M4_TO_M5.md)
 
 Kiểm thử ngay bằng Docker, không cần cài Python Windows:
