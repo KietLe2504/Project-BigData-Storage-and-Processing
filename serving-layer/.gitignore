@@ -1,0 +1,10 @@
+.env
+__pycache__/
+.pytest_cache/
+.venv/
+.venv-pdf/
+logs/*
+!logs/.gitkeep
+evidence/*
+!evidence/.gitkeep
+.streamlit/secrets.toml

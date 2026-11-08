@@ -1,0 +1,9 @@
+{
+  "source": "https://www.bts.gov/topics/airlines-and-airports/airline-codes",
+  "source_title": "BTS Airline Codes",
+  "source_page_date": "2023-07-12",
+  "verified_at_utc": "2026-11-08T05:03:58.744717+00:00",
+  "records": 17,
+  "reference_sha256": "45d64422599e739247359807576b518646a420d5c27ecd4041fd070865b0c77c",
+  "note": "Names for codes observed in M2. Historical codes are preserved; this is not a statement of current operational status."
+}

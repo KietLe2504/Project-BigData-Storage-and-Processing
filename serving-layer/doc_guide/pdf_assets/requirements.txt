@@ -1,0 +1,3 @@
+# Optional PDF authoring tools. Not needed to run M5.
+reportlab==4.4.4
+PyMuPDF==1.26.5

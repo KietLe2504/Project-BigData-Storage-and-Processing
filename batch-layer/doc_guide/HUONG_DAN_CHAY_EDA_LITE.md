@@ -271,6 +271,11 @@ Không cần chạy lại pipeline. Các bảng `kpi/` và `box/` rất nhỏ n�
 
 ### 5.2. Xuất CSV cho người không dùng Spark
 
+Để bàn giao cho M5, dùng `spark_jobs/09_export_m2_outputs.py`: xuất 13 bảng KPI
+và 7 bảng box thành CSV + JSONL, kèm schema, khóa và phạm vi dữ liệu trong
+`manifest.json`. Xem [hướng dẫn bàn giao M2 → M5](HUONG_DAN_BAN_GIAO_M2_M5.md).
+Đoạn code dưới đây là cách xuất CSV nhanh ngay trong notebook.
+
 Thêm một cell vào cuối notebook (đã chạy thử trên dữ liệu thử). Các file CSV sẽ xuất hiện trong `spark_jobs\export\` trên Windows:
 
 ```python

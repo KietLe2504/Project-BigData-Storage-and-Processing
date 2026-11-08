@@ -1,0 +1,31 @@
+services:
+  hdfs-loader:
+    image: aero-m5-hdfs:local
+    build:
+      context: .
+      dockerfile: Dockerfile.spark-loader
+    profiles: ["hdfs"]
+    environment:
+      M5_MONGO_URI: mongodb://mongo:27017
+      M5_DATABASE: ${M5_DATABASE:-aero_m5}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - ./evidence:/app/evidence
+    networks:
+      - default
+      - batch
+    command:
+      - --master
+      - local[2]
+      - --driver-memory
+      - 2g
+      - --conf
+      - spark.hadoop.fs.defaultFS=hdfs://namenode:9000
+      - /app/m5/load_parquet.py
+
+networks:
+  batch:
+    external: true
+    name: ${M5_BATCH_NETWORK:-batch-layer_default}

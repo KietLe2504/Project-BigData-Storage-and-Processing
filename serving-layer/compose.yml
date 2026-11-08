@@ -1,0 +1,51 @@
+name: aero-serving
+
+x-app: &app
+  image: aero-m5:local
+  build:
+    context: .
+  environment:
+    M5_MONGO_URI: mongodb://mongo:27017
+    M5_DATABASE: ${M5_DATABASE:-aero_m5}
+  depends_on:
+    mongo:
+      condition: service_healthy
+
+services:
+  mongo:
+    image: mongo:8.0.16
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${M5_MONGO_PORT:-27017}:27017"
+    volumes:
+      - m5_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand('ping').ok ? 0 : 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+
+  dashboard:
+    <<: *app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${M5_DASHBOARD_PORT:-8501}:8501"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  loader:
+    <<: *app
+    profiles: ["tools"]
+    volumes:
+      - ../batch-layer/spark_jobs/export/m2_to_m5:/data/m2:ro
+      - ./logs:/app/logs
+      - ./evidence:/app/evidence
+    command: ["python", "-m", "m5.load_batch", "--help"]
+
+volumes:
+  m5_mongo_data:

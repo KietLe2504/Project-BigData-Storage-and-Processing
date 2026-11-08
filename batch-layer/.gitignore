@@ -3,6 +3,7 @@ BTS_ZIP/
 data/
 raw/
 processed/
+spark_jobs/export/
 *.csv
 *.parquet
 *.zip
