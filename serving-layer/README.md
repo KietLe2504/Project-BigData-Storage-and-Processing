@@ -5,10 +5,7 @@
 Bao gồm nhận dữ liệu M2, Docker, nạp/kiểm tra MongoDB, bảng hãng–tuyến,
 mở dashboard, xử lý lỗi và bàn giao.
 
-**Tài liệu học tập theo từng task lớn:**
-[TAI_LIEU_HOC_TAP_M5_THEO_TASK.md](doc_guide/TAI_LIEU_HOC_TAP_M5_THEO_TASK.md).
-Nội dung trình bày lý thuyết, cách thực hiện và kết quả cần đạt của M5.
-Bản PDF task đã có trên repo: [TaskM5.pdf](doc_guide/TaskM5.pdf).
+**Tài liệu mô tả task M5:** [TaskM5.pdf](doc_guide/TaskM5.pdf).
 
 M5 nạp 13 bảng KPI và 7 bảng box của M2 vào MongoDB, kiểm tra toàn bộ giá trị,
 rồi phục vụ dashboard Streamlit. Hỗ trợ cả JSONL export và đọc trực tiếp KPI
@@ -20,9 +17,7 @@ kiểm thử end-to-end trước khi nghiệm thu streaming.
 Tài liệu có bước nhận dữ liệu ngoài Git, cài Docker, nạp/kiểm tra MongoDB,
 thao tác dashboard, vị trí output và đóng gói bàn giao.
 
-**Trình bày cho team:**
-[Kịch bản giải thích và demo M5](doc_guide/KICH_BAN_TRINH_BAY_VA_GIAI_THICH_M5.md).
-Tra cứu lệnh ngắn tại [HUONG_DAN_CHAY_M5.md](doc_guide/HUONG_DAN_CHAY_M5.md).
+**Tra cứu lệnh ngắn:** [HUONG_DAN_CHAY_M5.md](doc_guide/HUONG_DAN_CHAY_M5.md).
 
 Các script `scripts/build_m5_*` phục vụ biên soạn PDF/PowerPoint, không cần
 chạy để vận hành dashboard. File trình bày xuất ra, ảnh evidence và template
@@ -80,14 +75,10 @@ click chú giải để ẩn/hiện chuỗi, kéo để zoom; nút camera trên 
 
 Tài liệu:
 
-- [Bản đồ mạng bay: cách đọc, bộ lọc và nguồn tọa độ](doc_guide/BAN_DO_MANG_BAY.md)
-- [Danh mục hãng bay và sân bay: tra cứu hồ sơ, vị trí và thống kê](doc_guide/DANH_MUC_HANG_BAY_SAN_BAY.md)
-- [Bản đồ kết nối sân bay: bấm điểm, bấm tuyến và xem phân bố hãng](doc_guide/BAN_DO_KET_NOI_SAN_BAY.md)
-- [Collections, indexes và queries](doc_guide/MONGODB_COLLECTIONS_QUERIES.md)
-- [Demo và nghiệm thu](doc_guide/KICH_BAN_DEMO_M5.md)
-- [Kết quả kiểm thử thực tế](doc_guide/KET_QUA_KIEM_THU_M5.md)
+- [Hướng dẫn đầy đủ: cài đặt, dữ liệu, bản đồ, kiểm thử và vận hành](doc_guide/HUONG_DAN_CHAY_TU_DAU_DEN_OUTPUT_M5.md)
+- [Hướng dẫn chạy nhanh](doc_guide/HUONG_DAN_CHAY_M5.md)
+- [Mô tả task M5](doc_guide/TaskM5.pdf)
 - [Contract đề xuất M4 → M5](contracts/M4_TO_M5.md)
-- [Kế hoạch và phạm vi](doc_guide/KE_HOACH_IMPLEMENT_M5.md)
 
 Kiểm thử ngay bằng Docker, không cần cài Python Windows:
 

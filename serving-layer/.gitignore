@@ -8,3 +8,9 @@ logs/*
 evidence/*
 !evidence/.gitkeep
 .streamlit/secrets.toml
+
+# Keep only the three team handoff documents on GitHub; other local docs stay local.
+doc_guide/*
+!doc_guide/HUONG_DAN_CHAY_M5.md
+!doc_guide/HUONG_DAN_CHAY_TU_DAU_DEN_OUTPUT_M5.md
+!doc_guide/TaskM5.pdf

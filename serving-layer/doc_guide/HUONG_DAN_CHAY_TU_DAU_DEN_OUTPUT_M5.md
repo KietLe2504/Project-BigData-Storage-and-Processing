@@ -6,7 +6,7 @@ thêm phục vụ trình bày có thể được bàn giao riêng, không cần 
 Tài liệu dành cho thành viên nhận code M5 và dữ liệu M2 trên **máy Windows**.
 Làm theo thứ tự 1 → 11 để có MongoDB, dashboard và bộ evidence. Mục 12 là
 luồng Parquet/HDFS tùy chọn; mục 13 giải thích code; mục 14 xử lý lỗi.
-Khi trình bày cho team, dùng thêm [kịch bản thuyết trình](KICH_BAN_TRINH_BAY_VA_GIAI_THICH_M5.md).
+Khi trình bày cho team, dùng thêm [tài liệu mô tả task M5](TaskM5.pdf).
 Để có đầy đủ phân bố hãng theo tuyến và thống kê điểm đến của hãng,
 nhận thêm bảng hãng–tuyến ở mục 2.4 và nạp theo mục 7.4 trước khi dùng dashboard.
 
@@ -120,8 +120,7 @@ không nằm trong Git. Thành viên chỉ chạy serving nhận hai bộ export
 không cần tải raw hoặc dựng HDFS.
 
 Nếu nhóm chưa có bảng bổ sung, thành viên có HDFS/cleaned Parquet chạy
-`10_export_route_carriers.py` theo
-[hướng dẫn tạo và nạp bảng hãng–tuyến](BAN_DO_KET_NOI_SAN_BAY.md).
+`10_export_route_carriers.py` theo [mục 7.4](#route-carriers).
 
 ## 3. Cài môi trường trên máy Windows mới
 
@@ -373,7 +372,25 @@ Gõ `exit` trong mongosh để trở lại PowerShell. Không dán đoạn JavaS
 này thẳng vào PowerShell. Nếu thử lại trong cùng phiên shell, tránh khai
 báo lại `const`; thoát và mở phiên mới để chạy lại nguyên khối.
 
-### 7.4. Nạp bảng hãng–tuyến để mở đủ chức năng dashboard
+<a id="route-carriers"></a>
+
+### 7.4. Tạo/nhận và nạp bảng hãng–tuyến để mở đủ chức năng dashboard
+
+Nếu đã nhận thư mục bổ sung ở mục 2.4, thực hiện bước nạp dưới đây.
+Nếu cần tự tạo, máy có HDFS và Parquet đã làm sạch chạy khối sau trong
+**PowerShell tại thư mục project**; thay timestamp snapshot theo dữ liệu thực:
+
+```powershell
+docker compose -f .\batch-layer\docker-compose.yml up -d spark
+docker compose -f .\batch-layer\docker-compose.yml exec -T -u root spark /opt/spark/bin/spark-submit --master 'local[2]' --driver-memory 2g /opt/spark_jobs/10_export_route_carriers.py --base-snapshot /opt/spark_jobs/export/m2_to_m5/20261107T042703414867Z
+if ($LASTEXITCODE -ne 0) { throw 'Xuat bang hang theo tuyen chua thanh cong' }
+```
+
+Script đếm theo `year, origin, dest, carrier`, đối chiếu tổng hãng trên từng
+tuyến với `kpi__year_route.jsonl` và tổng tuyến theo hãng–sân bay xuất phát
+với `kpi__year_carrier_origin.jsonl`. Chỉ sau khi khớp mới xuất thư mục
+timestamp dưới `batch-layer/spark_jobs/export/m2_route_carriers/`.
+Bàn giao cả `manifest.json` và `route_carrier.jsonl` cho máy chạy serving.
 
 Sau khi snapshot M2 ở mục 6–7 đã PASS, chạy trong PowerShell tại
 `serving-layer` (giữ các biến đường dẫn ở mục 4):
@@ -398,8 +415,9 @@ verifier mục 7.1 vẫn kiểm tra 20 bảng M2 chuẩn, không tính hai bản
 
 Nếu chưa nạp bảng này, các KPI M2 vẫn xem được nhưng phần phân bố hãng theo
 tuyến và Top sân bay điểm đến sẽ báo thiếu dữ liệu. Sau nạp, nhấn
-**Làm mới dữ liệu**. Xem [bản đồ kết nối](BAN_DO_KET_NOI_SAN_BAY.md) để
-hiểu nguồn, kiểm tra và cách bàn giao bảng bổ sung sang máy khác.
+**Làm mới dữ liệu**. Mỗi bảng bổ sung gắn với snapshot M2 đã đối chiếu;
+khi đổi snapshot phải nạp bộ bổ sung tương ứng. Nạp lại không nhân đôi và
+lần nạp lỗi không thay phiên bản đang phục vụ.
 
 ## 8. Mở dashboard và thao tác để có kết quả
 
@@ -443,6 +461,26 @@ Các điểm phải giải thích đúng khi trình bày:
   thống kê đã được M2 tính ở đúng mức.
 - `reliability_score` là điểm nhóm tự định nghĩa 0–100, không phải chuẩn ngành.
 
+### 8.1. Tra cứu hãng/sân bay và đọc bản đồ kết nối
+
+- Chọn **Danh mục hãng bay & sân bay → Hãng bay** để tìm theo tên/mã,
+  xem hồ sơ, lưu lượng theo tháng và Top 10 sân bay xuất phát/điểm đến.
+  Hai bảng xếp hạng dùng cùng hãng và phạm vi năm đang chọn.
+- Chọn **Sân bay** để tìm theo mã/tên/thành phố, lọc vùng và chọn hồ sơ.
+  Bản đồ vẽ sân bay đang xem màu vàng và toàn bộ sân bay có chuyến đi/đến
+  với nó màu xanh, kể cả ngoài kết quả tìm kiếm hoặc vùng đang lọc.
+- Mỗi đường gộp hai chiều của một cặp sân bay; độ dày và thang màu theo
+  tổng chuyến hai chiều. Chú giải ghi min/max của mạng đang xem; thang căn
+  bậc hai giúp các đường ít chuyến vẫn nhìn thấy. Tooltip ghi số chính xác.
+- Bấm một điểm để chuyển hồ sơ/mạng kết nối sang sân bay đó. Bấm đường
+  hoặc chọn danh sách cặp bên dưới để xem số chuyến đúng giờ, trễ, hủy,
+  chuyển hướng, phân bố hãng, cơ cấu trạng thái và tải CSV. Có bộ chọn cả
+  hai chiều hoặc từng chiều. Tổng hãng phải khớp tổng chuyến của phạm vi.
+- Các mã thiếu tọa độ được báo, vẫn có trong danh sách thống kê. Đây là
+  đường nối minh họa dữ liệu lịch sử; bản đồ nền cần Internet.
+- Trang **Tuyến bay → Bản đồ mạng bay** có chế độ Top/toàn mạng, lọc sân
+  bay, đổi màu theo tỷ lệ trễ/delay trung bình/hủy và góc nhìn nghiêng 3D.
+
 ## 9. Kiểm thử, chụp bằng chứng và đóng gói output
 
 ### 9.1. Kiểm thử tự động khi nghiệm thu code
@@ -458,7 +496,7 @@ integration tests với database ngẫu nhiên `aero_m5_test_*` rồi dọn data
 test; không dùng database phục vụ để ghi fixtures. Máy cần Internet nếu
 chưa có các dependency test. Đọc tổng kết cuối lệnh: phải không có FAILED;
 integration tests phải chạy khi nghiệm thu kết nối MongoDB, không chỉ SKIP.
-Kết quả bản đã kiểm thử được ghi trong [biên bản kiểm thử](KET_QUA_KIEM_THU_M5.md).
+Lưu kết quả terminal và `logs/test_m5.log` làm biên bản kiểm thử của lần chạy.
 Không bắt buộc chạy lại tests mỗi lần chỉ mở dashboard.
 
 ### 9.2. Lưu ảnh và kết quả demo
@@ -587,8 +625,16 @@ và [xuất dữ liệu bàn giao M2 → M5](../../batch-layer/doc_guide/HUONG_D
 Luồng đọc code dễ trình bày:
 `load_m2.ps1 → load_batch.py → contracts.py → batch_writer.py → MongoDB`,
 sau đó `app.py → queries.py/metrics.py → charts.py → trình duyệt`.
-Chi tiết collection/index/query nằm trong
-[MONGODB_COLLECTIONS_QUERIES.md](MONGODB_COLLECTIONS_QUERIES.md).
+Collection `kpi_*` chứa số đếm và chỉ số ở các mức ngày/tháng/năm, hãng,
+sân bay xuất phát hoặc tuyến; `box_*` chứa thống kê phân bố delay. Catalog
+và khóa nghiệp vụ nằm trong `m5/contracts.py`. Mỗi document dữ liệu chuẩn
+có `snapshot_id`; unique index ghép mã này với khóa nghiệp vụ để tránh trùng.
+
+`batch_runs` lưu trạng thái, nguồn và kết quả đối chiếu; `serving_state`
+chọn snapshot đang phục vụ; `serving_locks` ngăn hai loader chạy đồng thời.
+`route_carrier_counts` bổ sung số chuyến theo hãng–tuyến và
+`route_carrier_state` chọn phiên bản bổ sung đã kiểm tra. Các ví dụ xem
+document/index bằng Compass hoặc mongosh ở mục 7.2–7.3.
 
 ## 14. Lỗi thường gặp và thao tác xử lý
 

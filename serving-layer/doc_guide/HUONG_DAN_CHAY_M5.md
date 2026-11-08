@@ -2,7 +2,7 @@
 
 Đây là hướng dẫn tra cứu ngắn. Nếu cài trên máy mới hoặc hướng dẫn thành
 viên khác, đọc [hướng dẫn từ đầu đến output M5](HUONG_DAN_CHAY_TU_DAU_DEN_OUTPUT_M5.md)
-và [kịch bản trình bày, giải thích code](KICH_BAN_TRINH_BAY_VA_GIAI_THICH_M5.md).
+và [tài liệu mô tả task M5](TaskM5.pdf).
 
 ## 1. Chỗ chạy lệnh và đầu vào
 
