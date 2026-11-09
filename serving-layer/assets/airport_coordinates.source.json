@@ -1,0 +1,17 @@
+{
+  "source": "https://ourairports.com/data/",
+  "download": "https://davidmegginson.github.io/ourairports-data/airports.csv",
+  "license": "Public domain",
+  "retrieved_at_utc": "2026-11-08T03:49:02.171799+00:00",
+  "source_sha256": "5754df21f25cb08d2def8a80b3eb609ddc52a4217afa8eb48280b6428c06e78f",
+  "reference_sha256": "37b6a94d61c0f94018e176cdabd253900ec74469ab8a98d8ad46168266e299ec",
+  "airports": 380,
+  "historical_aliases": {
+    "PBI": {
+      "ident": "KPBI",
+      "historical_name": "Palm Beach International Airport",
+      "source": "https://www.faa.gov/air_traffic/publications/media/AIP_Basic_dtd_3-21-24_POST.pdf"
+    }
+  },
+  "note": "Coordinates only; traffic and delay values always come from the active M2 snapshot."
+}

@@ -1,0 +1,10 @@
+{
+  "source": "https://ourairports.com/data/",
+  "license": "Public domain",
+  "retrieved_at_utc": "2026-11-08T05:03:58.501753+00:00",
+  "source_sha256": "5754df21f25cb08d2def8a80b3eb609ddc52a4217afa8eb48280b6428c06e78f",
+  "reference_sha256": "4f0619b88eeba2d398a7a08282edd07209d939b7d7774f3abd2f745e94254704",
+  "records": 380,
+  "join": "airport_coordinates.source_ident = OurAirports.ident",
+  "note": "Directory fields reflect the downloaded reference, not historical traffic or current operational status."
+}

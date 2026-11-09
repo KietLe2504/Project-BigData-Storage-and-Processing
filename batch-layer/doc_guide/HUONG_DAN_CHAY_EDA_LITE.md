@@ -61,7 +61,7 @@ docker compose exec -u root spark bash -lc "apt-get update && apt-get install -y
 Nếu notebook in ra hai phiên bản khác nhau (ví dụ `pyspark 3.5.9 | Spark 3.5.3`), cài đúng phiên bản của Spark trong image:
 
 ```powershell
-docker compose exec -u root spark bash -lc "python3 -m pip install pyspark==3.5.3"
+docker compose exec -u root spark bash -lc "python3 -m pip install pyspark"
 ```
 
 Cần `pandas` và `pyarrow` cho phần *custom aggregation* (pandas UDF), cho PageRank sân bay (`airport_network`) và cho hàm `peek()` hiển thị bảng. Thiếu `pandas`, cell hiển thị bảng vẫn chạy (rơi về `show()`), nhưng `airport_network` sẽ lỗi. Thiếu `pyarrow`, phần pandas UDF bị bỏ qua.
@@ -270,6 +270,11 @@ box("year_overall").where("var = 'arr' and population = 'all'").show()
 Không cần chạy lại pipeline. Các bảng `kpi/` và `box/` rất nhỏ nên đọc gần như tức thì.
 
 ### 5.2. Xuất CSV cho người không dùng Spark
+
+Để bàn giao cho M5, dùng `spark_jobs/09_export_m2_outputs.py`: xuất 13 bảng KPI
+và 7 bảng box thành CSV + JSONL, kèm schema, khóa và phạm vi dữ liệu trong
+`manifest.json`. Xem [hướng dẫn bàn giao M2 → M5](HUONG_DAN_BAN_GIAO_M2_M5.md).
+Đoạn code dưới đây là cách xuất CSV nhanh ngay trong notebook.
 
 Thêm một cell vào cuối notebook (đã chạy thử trên dữ liệu thử). Các file CSV sẽ xuất hiện trong `spark_jobs\export\` trên Windows:
 
