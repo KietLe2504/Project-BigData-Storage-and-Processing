@@ -4,9 +4,10 @@ Spark target: 3.5.3 (spark-sql-kafka-0-10_2.12:3.5.3)
 
 Each event is expanded into the eight grouping sets for carrier, origin and
  destination. One streaming aggregation then maintains a separate full-window
- aggregate for each dimensions object. The MongoDB record shape remains the M4
- to M5 contract shape: pipeline_id, source, window_start, window_end, revision,
- dimensions and metrics.
+ aggregate for each grouping. MongoDB stores a flat record for the M5 Streaming
+ table: pipeline_id, date, window_start, window_end, revision, carrier, origin,
+ dest and the KPI fields. Missing dimensions are stored as ".". The source is
+ retained as metadata for provenance and source-specific record identity.
 
 Flight counting is distinct by flight_key within each source/window/group.
 When more than one observation for a flight occurs in that window, the latest
@@ -17,8 +18,10 @@ from __future__ import annotations
 
 import math
 import os
-from datetime import timezone
+from datetime import datetime, timezone
 from typing import Any
+
+from pymongo.errors import DuplicateKeyError
 
 from pyspark.sql import DataFrame, SparkSession, functions as F
 from pyspark.sql.types import (
@@ -30,7 +33,7 @@ from pyspark.sql.types import (
 )
 
 from m5.mongo import connect
-from m5.stream_writer import normalize, write_window
+from m5.stream_writer import normalize
 
 
 EVENT_SCHEMA = StructType(
@@ -85,30 +88,87 @@ def utc_iso(value) -> str:
     )
 
 
+FLAT_PAYLOAD_FIELDS = (
+    "pipeline_id",
+    "source",
+    "date",
+    "window_start",
+    "window_end",
+    "carrier",
+    "origin",
+    "dest",
+    "flights",
+    "cancelled",
+    "diverted",
+    "on_time",
+    "delayed15",
+    "delayed60",
+    "sum_dep_delay",
+)
+
+
 def same_aggregate(previous: dict[str, Any], candidate: dict[str, Any]) -> bool:
-    """Compare logical payload fields, excluding revision and ingest time."""
-    fields = (
-        "pipeline_id",
-        "source",
-        "window_start",
-        "window_end",
-        "dimensions",
-        "metrics",
+    """Compare flat logical fields, excluding revision and MongoDB _id."""
+    return all(
+        previous.get(field) == candidate.get(field)
+        for field in FLAT_PAYLOAD_FIELDS
     )
-    return all(previous.get(field) == candidate.get(field) for field in fields)
 
 
 def write_full_window_with_revision(db, record: dict[str, Any]) -> str:
-    """Persist a full aggregate with a Mongo-backed, restart-safe revision."""
+    """Persist a flat full-window record with a durable, replay-safe revision.
+
+    ``record["_identity"]`` is the legacy M5 logical identity payload. Passing it
+    through normalize() preserves the existing _id semantics (pipeline, source,
+    full event-time window and actual dimension keys), while the stored document
+    itself uses the flat v3 schema.
+    """
     collection = db.stream_window_kpi
-    candidate = normalize({**record, "revision": 0})
-    previous = collection.find_one({"_id": candidate["_id"]})
+    identity = normalize({**record["_identity"], "revision": 0})
+    logical_id = identity["_id"]
+    flat_payload = record["document"]
 
-    if previous is not None and same_aggregate(previous, candidate):
-        return "unchanged"
+    # Optimistic compare-and-replace avoids silently overwriting a concurrent
+    # revision. A duplicate insert means another writer won the first-write race;
+    # re-read and retry using its revision.
+    for _ in range(10):
+        previous = collection.find_one({"_id": logical_id})
+        if previous is not None and same_aggregate(previous, flat_payload):
+            return "unchanged"
 
-    next_revision = 1 if previous is None else int(previous["revision"]) + 1
-    return write_window(db, {**record, "revision": next_revision})
+        next_revision = 1 if previous is None else int(previous.get("revision", 0)) + 1
+        document = {
+            "_id": logical_id,
+            **flat_payload,
+            "revision": next_revision,
+        }
+
+        if previous is None:
+            try:
+                collection.insert_one(document)
+                return "inserted"
+            except DuplicateKeyError:
+                continue
+
+        result = collection.replace_one(
+            {"_id": logical_id, "revision": previous.get("revision")},
+            document,
+            upsert=False,
+        )
+        if result.matched_count == 1:
+            return "updated"
+
+    raise RuntimeError(
+        f"Could not persist M4 window after concurrent revision retries: {logical_id}"
+    )
+
+
+def _utc_window_parts(value) -> tuple[str, str]:
+    """Return (UTC date, UTC clock time) for a Spark window timestamp."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    value = value.astimezone(timezone.utc)
+    return value.strftime("%Y-%m-%d"), value.strftime("%H:%M:%S")
 
 
 def latest_by_flight(observations) -> dict[str, Any]:
@@ -129,7 +189,7 @@ def latest_by_flight(observations) -> dict[str, Any]:
 
 
 def make_record(row) -> dict[str, Any] | None:
-    """Build one full M5 record for a single window and dimension combination."""
+    """Build the flat v3 MongoDB document and its stable logical identity."""
     latest = latest_by_flight(row.observations)
     if not latest:
         return None
@@ -172,13 +232,12 @@ def make_record(row) -> dict[str, Any] | None:
     for key in ("carrier", "origin", "dest"):
         value = getattr(row, key)
         if value is not None:
-            normalized = str(value).strip()
-            if normalized:
-                dimensions[key] = normalized
+            normalized_value = str(value).strip()
+            if normalized_value:
+                dimensions[key] = normalized_value
 
     # The grouping expansion ensures only the dimensions selected by this
-    # grouping level are non-null. This is also the logical dimension identity
-    # used by m5.stream_writer.normalize().
+    # grouping level are non-null. Validate the logical grouping before flattening.
     expected = set(GROUPING_REQUIREMENTS[row.scope])
     if set(dimensions) != expected:
         raise ValueError(
@@ -186,16 +245,42 @@ def make_record(row) -> dict[str, Any] | None:
             f"expected={sorted(expected)}, actual={sorted(dimensions)}"
         )
 
-    return {
+    window_start_iso = utc_iso(row.window.start)
+    window_end_iso = utc_iso(row.window.end)
+    date, window_start_time = _utc_window_parts(row.window.start)
+    _, window_end_time = _utc_window_parts(row.window.end)
+
+    # Keep the previous logical identity convention so source-specific records
+    # and the full window remain distinct even though the displayed schema has
+    # separate date/time columns and omits source from the visible table.
+    identity = {
         "pipeline_id": PIPELINE_ID,
         "source": row.source,
-        "window_start": utc_iso(row.window.start),
-        "window_end": utc_iso(row.window.end),
-        # Set by write_full_window_with_revision using durable MongoDB state.
+        "window_start": window_start_iso,
+        "window_end": window_end_iso,
         "revision": 0,
         "dimensions": dimensions,
         "metrics": metrics,
     }
+
+    # The web table can select these fields in this exact order. Missing
+    # dimensions are represented by a literal period, not null or JSON text.
+    document = {
+        "pipeline_id": PIPELINE_ID,
+        "source": row.source,  # metadata; omit from the visible 15-column table
+        "date": date,
+        "window_start": window_start_time,
+        "window_end": window_end_time,
+        "revision": 0,  # replaced with the durable MongoDB revision on write
+        "carrier": dimensions.get("carrier", "."),
+        "origin": dimensions.get("origin", "."),
+        "dest": dimensions.get("dest", "."),
+        **metrics,
+        # Metadata used by the M5 dashboard to show the latest ingestion/update time.
+        "ingested_at": datetime.now(timezone.utc),
+    }
+
+    return {"_identity": identity, "document": document}
 
 
 def write_batch(batch_df: DataFrame, batch_id: int) -> None:
@@ -222,10 +307,12 @@ def write_batch(batch_df: DataFrame, batch_id: int) -> None:
             print(
                 "M4_WINDOW",
                 f"scope={row.scope}",
-                f"source={record['source']}",
-                f"window_start={record['window_start']}",
-                f"window_end={record['window_end']}",
-                f"dimensions={record['dimensions']}",
+                f"date={record['document']['date']}",
+                f"window_start={record['document']['window_start']}",
+                f"window_end={record['document']['window_end']}",
+                f"carrier={record['document']['carrier']}",
+                f"origin={record['document']['origin']}",
+                f"dest={record['document']['dest']}",
                 f"result={result}",
             )
     finally:
