@@ -11,7 +11,7 @@
 
 ## 1. Mục tiêu và luồng xử lý
 
-M4 đọc JSON flight-status observations từ Kafka, parse và lọc sự kiện, gán event time, tổng hợp KPI theo cửa sổ thời gian và các cấp dimension, sau đó ghi **full aggregate** vào MongoDB thông qua writer của M5.
+M4 đọc JSON flight-status observations từ Kafka, parse và lọc sự kiện, gán event time, tổng hợp KPI theo cửa sổ thời gian và các cấp dimension, sau đó ghi **full aggregate** vào MongoDB.
 
 ```text
 Kafka: flight-realtime
@@ -28,16 +28,13 @@ M4 — Spark Structured Streaming 3.5.3
   8. Tạo revision bền vững qua MongoDB
         |
         v
-M5: m5.stream_writer.write_window(...)
-        |
-        v
 MongoDB: aero_m5.stream_window_kpi
         |
         v
 M5 Dashboard — trang Streaming
 ```
 
-M4 không ghi raw Kafka messages vào MongoDB và không gửi delta. Mỗi document là aggregate đầy đủ cho một `source` + window + tổ hợp `dimensions`.
+M4 không ghi raw Kafka messages vào MongoDB và không gửi delta. Mỗi document là aggregate đầy đủ cho một `source` + window + tổ hợp dimension.
 
 ## 2. Đầu vào Kafka
 
@@ -63,14 +60,21 @@ Một record chỉ được đưa vào xử lý khi:
 2. `event_type == "flight_status_observation"`;
 3. `source` nằm trong `M4_ALLOWED_SOURCES`;
 4. `flight_key` không null;
-5. `observed_at` parse được thành timestamp;
-6. `departure_iata` và `arrival_iata` không null.
+5. `observed_at` parse được thành timestamp.
+
+Các dimension IATA được chuẩn hóa riêng. Dimension null hoặc rỗng không nhất thiết làm event bị loại hoàn toàn; chỉ những grouping yêu cầu dimension không có giá trị mới bị bỏ qua.
 
 `M4_ALLOWED_SOURCES=aviationstack` chỉ xử lý dữ liệu AviationStack, không trộn record mô phỏng `simulated` vào kết quả live.
 
 ### Event time
 
-M4 lấy `observed_at` làm `event_time`. Đây là thời điểm quan sát/poll dữ liệu, không nhất thiết là thời điểm trạng thái chuyến bay thay đổi ngoài thực tế. Spark session timezone được đặt thành UTC; `window_start` và `window_end` được ghi sang MongoDB dưới dạng ISO timestamp UTC có hậu tố `Z`.
+M4 lấy `observed_at` làm `event_time`. Đây là thời điểm quan sát/poll dữ liệu, không nhất thiết là thời điểm trạng thái chuyến bay thay đổi ngoài thực tế. Spark session timezone được đặt thành UTC.
+
+MongoDB lưu:
+- `date`: ngày UTC, định dạng `YYYY-MM-DD`.
+- `window_start`: giờ bắt đầu UTC, định dạng `HH:MM:SS`.
+- `window_end`: giờ kết thúc UTC, định dạng `HH:MM:SS`.
+- `ingested_at`: thời điểm ghi hoặc cập nhật aggregate, theo UTC.
 
 ## 3. Cấu hình streaming
 
@@ -94,7 +98,7 @@ Các biến môi trường trong M4:
 - **Watermark 10 phút:** giúp Spark giới hạn state. Event đến trễ hơn watermark hiện tại có thể không còn được đưa vào kết quả.
 - **Trigger 10 giây:** Spark cố gắng chạy micro-batch theo nhịp này; thời lượng thực tế phụ thuộc thời gian xử lý.
 - **`outputMode("update")`:** sink nhận các window/group có thay đổi trong micro-batch.
-- **`foreachBatch(write_batch)`:** chuyển kết quả mỗi micro-batch sang Python và ghi qua M5 writer.
+- **`foreachBatch(write_batch)`:** chuyển kết quả mỗi micro-batch sang Python và ghi vào MongoDB.
 - **Checkpoint HDFS:** lưu tiến độ và trạng thái xử lý của Structured Streaming.
 
 **Quy tắc checkpoint:** khi restart cùng một query, giữ nguyên `M4_CHECKPOINT`. Không xóa checkpoint để xử lý lỗi khởi động thông thường. Khi thay đổi cấu trúc stateful aggregation hoặc muốn chạy một pipeline độc lập, tạo checkpoint path mới và lưu ý query mới có thể đọc lại Kafka từ offset khởi đầu.
@@ -125,20 +129,32 @@ Mỗi event được mở rộng thành tối đa tám grouping sets trên ba di
 - `origin` ← `departure_iata`
 - `dest` ← `arrival_iata`
 
-| Scope nội bộ | Object `dimensions` được ghi sang M5 |
+| Scope nội bộ | Dimension được ghi sang MongoDB |
 |---|---|
-| `all` | `{}` |
-| `carrier` | `{"carrier": "..."}` |
-| `dest` | `{"dest": "..."}` |
-| `origin` | `{"origin": "..."}` |
-| `carrier_dest` | `{"carrier": "...", "dest": "..."}` |
-| `carrier_origin` | `{"carrier": "...", "origin": "..."}` |
-| `origin_dest` | `{"origin": "...", "dest": "..."}` |
-| `carrier_origin_dest` | `{"carrier": "...", "origin": "...", "dest": "..."}` |
+| `all` | Không có dimension |
+| `carrier` | `carrier` |
+| `dest` | `dest` |
+| `origin` | `origin` |
+| `carrier_dest` | `carrier`, `dest` |
+| `carrier_origin` | `carrier`, `origin` |
+| `origin_dest` | `origin`, `dest` |
+| `carrier_origin_dest` | `carrier`, `origin`, `dest` |
 
 Dimension rỗng được chuẩn hóa thành null. Nếu một grouping cần dimension mà event không có, grouping đó bị bỏ qua. Ví dụ event thiếu carrier vẫn có thể đóng góp vào grouping `all`, `origin`, `dest`, `origin_dest`, nhưng không thể đóng góp vào grouping cần `carrier`.
 
-`scope` là thông tin nội bộ để kiểm tra/log; M5 không cần trường top-level `scope`. Cấp grouping được thể hiện bởi các key hiện diện trong `dimensions`.
+Trong MongoDB v1, các dimension được lưu thành các trường top-level. Dimension không hiện diện trong grouping được biểu diễn bằng dấu `.`.
+
+Ví dụ:
+
+```json
+{
+  "carrier": ".",
+  "origin": "JFK",
+  "dest": "SYR"
+}
+```
+
+`scope` là thông tin nội bộ để kiểm tra/log; MongoDB không cần trường top-level `scope`. Cấp grouping được thể hiện bởi các dimension có giá trị khác `.`.
 
 ## 6. Định nghĩa KPI
 
@@ -167,42 +183,69 @@ Các quy tắc:
 
 Các metric trên phản ánh departure delay trong stream; không nên diễn giải chúng thành arrival-delay KPI của dữ liệu BTS lịch sử.
 
-## 7. Hợp đồng output M4 → M5 và revision
+## 7. Hợp đồng output M4 → MongoDB và revision
 
-Mỗi window/group được ghi thành record có đúng bảy trường top-level:
+Mỗi window/group được ghi thành một flat document với 17 trường:
 
 ```json
 {
   "pipeline_id": "m4-flight-status-v1",
   "source": "aviationstack",
-  "window_start": "<UTC ISO timestamp>",
-  "window_end": "<UTC ISO timestamp>",
+  "date": "2026-11-20",
+  "window_start": "15:45:00",
+  "window_end": "15:50:00",
   "revision": 1,
-  "dimensions": {"carrier": "AA", "origin": "JFK"},
-  "metrics": {
-    "flights": 12,
-    "cancelled": 1,
-    "diverted": 0,
-    "on_time": 7,
-    "delayed15": 3,
-    "delayed60": 1,
-    "sum_dep_delay": 82.0
-  }
+  "carrier": "KE",
+  "origin": ".",
+  "dest": "SYR",
+  "flights": 1,
+  "cancelled": 0,
+  "diverted": 0,
+  "on_time": 1,
+  "delayed15": 0,
+  "delayed60": 0,
+  "sum_dep_delay": 0.0,
+  "ingested_at": "2026-11-21T16:17:52Z"
 }
 ```
 
-Số liệu chỉ minh họa cấu trúc. Với grouping `all`, `dimensions` là `{}`.
+Số liệu chỉ minh họa cấu trúc.
 
-### 7.1. Sinh revision
+### 7.1. Thứ tự các trường
 
-`write_full_window_with_revision()` thực hiện:
+| Thứ tự | Field | Ý nghĩa |
+|---:|---|---|
+| 1 | `pipeline_id` | Định danh pipeline |
+| 2 | `source` | Nguồn dữ liệu |
+| 3 | `date` | Ngày UTC của window |
+| 4 | `window_start` | Giờ bắt đầu window UTC |
+| 5 | `window_end` | Giờ kết thúc window UTC |
+| 6 | `revision` | Phiên bản aggregate |
+| 7 | `carrier` | Airline IATA hoặc `.` |
+| 8 | `origin` | Origin IATA hoặc `.` |
+| 9 | `dest` | Destination IATA hoặc `.` |
+| 10 | `flights` | Số chuyến bay |
+| 11 | `cancelled` | Số chuyến bị hủy |
+| 12 | `diverted` | Số chuyến chuyển hướng |
+| 13 | `on_time` | Số chuyến đúng giờ |
+| 14 | `delayed15` | Số chuyến trễ từ 15 phút |
+| 15 | `delayed60` | Số chuyến trễ từ 60 phút |
+| 16 | `sum_dep_delay` | Tổng departure delay dương |
+| 17 | `ingested_at` | Thời điểm ghi/cập nhật aggregate |
 
-1. Gọi `normalize()` với revision tạm `0` để lấy logical `_id` ổn định từ `source`, `pipeline_id`, window và toàn bộ `dimensions`.
-2. Tìm document hiện tại trong `stream_window_kpi` theo `_id`.
-3. Nếu payload nghiệp vụ không đổi, trả `unchanged`, không ghi lại.
+Các dimension không thuộc grouping hiện tại được lưu bằng `"."`. `source` được giữ làm metadata và tham gia xác định logical record identity. `ingested_at` phục vụ kiểm tra độ mới của dữ liệu và được đặt cuối document.
+
+### 7.2. Sinh revision
+
+M4 thực hiện:
+
+1. Tạo logical identity ổn định từ `source`, `pipeline_id`, window và dimension combination.
+2. Tìm document hiện tại trong `stream_window_kpi`.
+3. Nếu payload nghiệp vụ không đổi, trả `unchanged`, không tăng revision.
 4. Nếu chưa có document, dùng revision `1`.
 5. Nếu payload thay đổi, lấy revision hiện tại cộng `1`.
-6. Gọi `write_window()` của M5 để thực hiện insert/update và version guard.
+6. Ghi document mới với revision tương ứng.
+7. Retry nếu xảy ra xung đột khi ghi đồng thời.
 
 `batch_id` của Spark chỉ phục vụ log; không được dùng làm revision bền vững. Đây là thiết kế full-aggregate có kiểm soát replay/revision; chưa nên tuyên bố exactly-once end-to-end khi chưa kiểm thử restart, replay, late event, lỗi sink và concurrent writer.
 
@@ -216,16 +259,15 @@ Các service liên quan cần đang chạy và có các kết nối sau:
 | MongoDB | `mongo:27017` |
 | HDFS NameNode | `aero-namenode:9000` theo checkpoint trong lệnh chạy hiện tại |
 | Script M4 | `/opt/spark_jobs/m4_flight_status.py` |
-| Package M5 | `/opt/serving-layer`, được thêm vào `PYTHONPATH` |
+| Package M5 | `/opt/serving-layer` nếu được sử dụng trong môi trường triển khai |
 
 Spark container cần:
 
 - có Kafka connector đúng phiên bản Spark 3.5.3 (được nạp bằng `--packages` trong lệnh chạy);
 - cài PyMongo trong Python environment mà `spark-submit` sử dụng;
-- mount source code M5 tại `/opt/serving-layer`;
 - cùng Docker network với Kafka và MongoDB.
 
-Nếu mount M5 chưa được cấu hình, thêm dòng sau vào `volumes` của service `spark` trong `batch-layer/docker-compose.yml`:
+Nếu package M5 chưa được mount nhưng môi trường chạy yêu cầu package này, thêm dòng sau vào `volumes` của service `spark` trong `batch-layer/docker-compose.yml`:
 
 ```yaml
       - ../serving-layer:/opt/serving-layer:ro
@@ -246,26 +288,16 @@ docker exec -u root aero-spark \
 
 Cài trực tiếp vào container phù hợp để kiểm thử nhanh; package có thể mất khi container được tạo lại. Khi ổn định, nên đưa dependency vào custom Spark image.
 
-Kiểm tra MongoDB và package M5 từ Spark:
-
-```bash
-docker exec \
-  -e PYTHONPATH=/opt/serving-layer \
-  -e M5_MONGO_URI=mongodb://mongo:27017 \
-  -e M5_DATABASE=aero_m5 \
-  aero-spark \
-  python3 -c 'from m5.mongo import connect; import pymongo; import m5.stream_writer as w; c, db = connect(); print("M5_REACHABLE", db.name, "PyMongo", pymongo.version, "WRITER", w.__file__); c.close()'
-```
-
 ## 9. Chạy M4
 
-Chạy từ thư mục gốc project với đúng command đang dùng:
+Chạy từ thư mục gốc project với đúng command:
 
 ```bash
 docker exec \
   -e PYTHONPATH=/opt/serving-layer \
   -e M5_MONGO_URI=mongodb://mongo:27017 \
   -e M5_DATABASE=aero_m5 \
+  -e M4_PIPELINE_ID=m4-flight-status-v1 \
   -e M4_ALLOWED_SOURCES=aviationstack \
   -e M4_CHECKPOINT=hdfs://aero-namenode:9000/aero/checkpoints/m4/flight-status-v1 \
   aero-spark \
@@ -279,9 +311,10 @@ Các tham số trong command:
 
 | Tham số | Giá trị |
 |---|---|
-| `PYTHONPATH` | `/opt/serving-layer` để import package `m5` |
+| `PYTHONPATH` | `/opt/serving-layer` nếu cần import package M5 |
 | `M5_MONGO_URI` | `mongodb://mongo:27017` |
 | `M5_DATABASE` | `aero_m5` |
+| `M4_PIPELINE_ID` | `m4-flight-status-v1` |
 | `M4_ALLOWED_SOURCES` | `aviationstack` |
 | `M4_CHECKPOINT` | `hdfs://aero-namenode:9000/aero/checkpoints/m4/flight-status-v1` |
 | Kafka bootstrap/topic | `kafka:9092` / `flight-realtime` (giá trị mặc định trong code) |
@@ -299,18 +332,30 @@ Mở terminal khác và chạy:
 docker exec aero-serving-mongo-1 mongosh --quiet --eval '
 const dbTest = db.getSiblingDB("aero_m5");
 dbTest.stream_window_kpi.find(
-  {},
+  {
+    pipeline_id: "m4-flight-status-v1"
+  },
   {
     _id: 0,
     pipeline_id: 1,
     source: 1,
+    date: 1,
     window_start: 1,
     window_end: 1,
     revision: 1,
-    dimensions: 1,
-    metrics: 1
+    carrier: 1,
+    origin: 1,
+    dest: 1,
+    flights: 1,
+    cancelled: 1,
+    diverted: 1,
+    on_time: 1,
+    delayed15: 1,
+    delayed60: 1,
+    sum_dep_delay: 1,
+    ingested_at: 1
   }
-).sort({window_end: -1}).limit(10).forEach(printjson);
+).sort({date: -1, window_end: -1}).limit(10).forEach(printjson);
 '
 ```
 
@@ -318,12 +363,14 @@ Lưu ý: lệnh trên truy vấn database `aero_m5`; tên biến `dbTest` chỉ 
 
 Kiểm tra:
 
-- Collection `stream_window_kpi` có document từ M4.
+- Collection `stream_window_kpi` có document từ M4 v1.
 - `source` là `aviationstack` với cấu hình chạy hiện tại.
-- Document có đúng bảy trường top-level: `pipeline_id`, `source`, `window_start`, `window_end`, `revision`, `dimensions`, `metrics`.
-- `window_start` và `window_end` có timezone UTC, `window_start < window_end`.
-- `dimensions` phù hợp với một trong tám grouping levels.
-- `metrics` có `flights`, `cancelled`, `diverted`, `on_time`, `delayed15`, `delayed60`, `sum_dep_delay`.
+- Document sử dụng flat schema, không có nested `dimensions` và `metrics`.
+- `date` có định dạng `YYYY-MM-DD`.
+- `window_start` và `window_end` có định dạng `HH:MM:SS`.
+- `carrier`, `origin`, `dest` chứa IATA value hoặc `.`.
+- Document có đủ các KPI fields.
+- `ingested_at` tồn tại và thể hiện thời điểm cập nhật UTC.
 - Khi cùng logical window/group thay đổi, revision tăng; khi payload không đổi, M4 bỏ qua lần ghi đó.
 
 Để dùng database riêng khi thử nghiệm, đổi `M5_DATABASE` trong lệnh chạy sang database test (ví dụ `aero_m5_m4_test`) và đổi tên database trong lệnh `mongosh` cho khớp. Không dùng database dashboard cho fixture thử nghiệm nếu không muốn chúng xuất hiện trên giao diện.
@@ -337,6 +384,30 @@ http://localhost:8501
 ```
 
 Chọn trang **Streaming**. Trang này đọc collection `stream_window_kpi`, tự refresh khoảng 10 giây và hiển thị độ mới của dữ liệu. Nếu MongoDB chưa có document M4 thì dashboard chưa có aggregate streaming để hiển thị.
+
+Dashboard hiển thị các trường theo thứ tự:
+
+```text
+pipeline_id
+source
+date
+window_start
+window_end
+revision
+carrier
+origin
+dest
+flights
+cancelled
+diverted
+on_time
+delayed15
+delayed60
+sum_dep_delay
+ingested_at
+```
+
+Các dimension không hiện diện được hiển thị là `.`. `ingested_at` được dùng để xác định thời điểm cập nhật mới nhất.
 
 ## 12. Dừng, restart và xử lý lỗi
 
@@ -360,22 +431,20 @@ docker exec aero-namenode hdfs dfs -ls -R /aero/checkpoints/m4
 |---|---|
 | Spark không resolve `kafka` | Spark và Kafka có cùng Docker network không; kiểm tra `docker inspect aero-spark` và `docker inspect aero-kafka` |
 | Spark không resolve `mongo` | MongoDB có được nối vào batch network với alias `mongo` không |
-| `No module named 'm5'` | Mount `/opt/serving-layer` và `PYTHONPATH` |
 | `No module named 'pymongo'` | Cài PyMongo vào Python environment của Spark container |
-| `Unsupported streaming metric` | Writer được import có cho phép `sum_dep_delay` không; kiểm tra `w.__file__` và hai lệnh `grep` |
-| Có `M4_STARTED` nhưng không có `M4_WINDOW` | Kiểm tra Kafka có event mới, source filter, schema, `flight_key`, `observed_at` và các mã IATA |
-| MongoDB có document nhưng dashboard không hiện | Xác nhận dashboard và M4 đang dùng cùng database `aero_m5`, collection `stream_window_kpi` |
+| `M4_STARTED` nhưng không có `M4_WINDOW` | Kiểm tra Kafka có event mới, source filter, schema, `flight_key` và `observed_at` |
+| MongoDB có document nhưng dashboard không hiện | Xác nhận dashboard và M4 đang dùng cùng database `aero_m5`, collection `stream_window_kpi` và pipeline ID |
 | Event đến muộn không xuất hiện | Kiểm tra event time và watermark; event đã quá watermark có thể bị loại |
 | Restart đọc lại hoặc ghi lại dữ liệu | Kiểm tra M4 có dùng lại đúng checkpoint không |
+| `KeyError: 'ingested_at'` | Kiểm tra các document cũ và đảm bảo dashboard xử lý trường `ingested_at` an toàn |
 
 ## 13. Checklist nghiệm thu M4
 
 - [ ] Spark Structured Streaming khởi động và log `M4_STARTED` đúng cấu hình.
 - [ ] Kafka connector Spark 3.5.3 đọc được `flight-realtime`.
-- [ ] Spark import đúng M5 package và kết nối được MongoDB.
-- [ ] Host writer và writer trong container đều chứa hỗ trợ `sum_dep_delay`.
+- [ ] Spark kết nối được MongoDB.
 - [ ] Log `M4_WINDOW` xuất hiện khi có event hợp lệ.
-- [ ] MongoDB có document đúng bảy trường top-level, source, UTC window và dimensions.
+- [ ] MongoDB có document đúng flat schema, source, UTC date/time và dimensions.
 - [ ] Các metric đúng theo định nghĩa departure-delay ở Mục 6.
 - [ ] Tám grouping levels được tạo phù hợp với dimension có trong event.
 - [ ] Replay payload không đổi không làm tăng revision; payload đổi làm revision tăng.
@@ -383,8 +452,8 @@ docker exec aero-namenode hdfs dfs -ls -R /aero/checkpoints/m4
 - [ ] Đã kiểm tra late event, lỗi sink và hành vi retry.
 - [ ] Trang Streaming của Dashboard hiển thị dữ liệu và độ mới hợp lý.
 
-Kafka connector smoke test đọc được 25 records trước đó chỉ chứng minh Spark có thể đọc topic bằng connector. Chỉ đánh dấu tích hợp M4 → M5 hoàn tất sau khi có log Structured Streaming, document MongoDB hợp lệ và xác nhận hiển thị ở Dashboard.
+Kafka connector smoke test đọc được 25 records trước đó chỉ chứng minh Spark có thể đọc topic bằng connector. Chỉ đánh dấu tích hợp M4 → MongoDB → M5 hoàn tất sau khi có log Structured Streaming, document MongoDB hợp lệ và xác nhận hiển thị ở Dashboard.
 
 ---
 
-**Tóm tắt:** M4 là pipeline Spark Structured Streaming đọc flight observations từ Kafka, xử lý event-time theo cửa sổ 5 phút với watermark 10 phút, đếm flight instance phân biệt theo `flight_key`, tạo KPI ở tám cấp dimension, rồi ghi full-window aggregates có revision vào `aero_m5.stream_window_kpi` thông qua M5 writer.
+**Tóm tắt:** M4 là pipeline Spark Structured Streaming đọc flight observations từ Kafka, xử lý event-time theo cửa sổ 5 phút với watermark 10 phút, đếm flight instance phân biệt theo `flight_key`, tạo KPI ở tám cấp dimension, rồi ghi full-window aggregates dạng flat document có revision vào `aero_m5.stream_window_kpi`. M5 Dashboard sử dụng các trường này để hiển thị dữ liệu streaming.
